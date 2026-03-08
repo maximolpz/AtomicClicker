@@ -6,6 +6,7 @@ const {
   createAudioResource,
   AudioPlayerStatus,
   VoiceConnectionStatus,
+  getVoiceConnection,
 } = require('@discordjs/voice');
 
 const client = new Client({
@@ -24,34 +25,27 @@ const STREAMS = {
 };
 
 let player = null;
-let connection = null;
-let currentMessage = null;
-let readyFired = false;
 
-function playStream(url) {
+function playStream(url, connection) {
   const resource = createAudioResource(url);
   player = createAudioPlayer();
 
   player.on(AudioPlayerStatus.Playing, () => {
     console.log('▶️  Reproduciendo...');
-    if (currentMessage && !readyFired) {
-      readyFired = true;
-      currentMessage.reply('🎵 ¡Lofi radio activada! 🌙');
-    }
   });
 
   player.on(AudioPlayerStatus.Idle, () => {
     console.log('🔄 Reiniciando...');
-    setTimeout(() => playStream(url), 3000);
+    setTimeout(() => playStream(url, connection), 3000);
   });
 
   player.on('error', (err) => {
     console.error('❌ Error player:', err.message);
-    setTimeout(() => playStream(url), 5000);
+    setTimeout(() => playStream(url, connection), 5000);
   });
 
   player.play(resource);
-  if (connection) connection.subscribe(player);
+  connection.subscribe(player);
 }
 
 client.on('messageCreate', async (message) => {
@@ -61,15 +55,11 @@ client.on('messageCreate', async (message) => {
     const voiceChannel = message.member?.voice?.channel;
     if (!voiceChannel) return message.reply('❌ Entra a un canal de voz primero.');
 
-    if (connection) {
-      connection.destroy();
-      connection = null;
-    }
+    // Destruir conexión previa si existe
+    const existingConnection = getVoiceConnection(message.guild.id);
+    if (existingConnection) existingConnection.destroy();
 
-    currentMessage = message;
-    readyFired = false;
-
-    connection = joinVoiceChannel({
+    const connection = joinVoiceChannel({
       channelId: voiceChannel.id,
       guildId: message.guild.id,
       adapterCreator: message.guild.voiceAdapterCreator,
@@ -77,48 +67,40 @@ client.on('messageCreate', async (message) => {
       selfMute: false,
     });
 
+    console.log('📡 Estado inicial:', connection.state.status);
+
     connection.on('stateChange', (oldState, newState) => {
       console.log(`🔊 ${oldState.status} → ${newState.status}`);
 
       if (newState.status === VoiceConnectionStatus.Ready) {
         console.log('✅ Listo, reproduciendo...');
-        playStream(STREAMS.lofi);
+        playStream(STREAMS.lofi, connection);
+        message.reply('🎵 ¡Lofi radio activada! 🌙');
       }
 
       if (newState.status === VoiceConnectionStatus.Disconnected) {
+        console.log('⚠️ Desconectado');
         connection.destroy();
-        connection = null;
       }
     });
 
     connection.on('error', (err) => {
-      console.error('❌ Error conexión:', err.message);
+      console.error('❌ Error conexión:', err);
     });
 
-    // 🔑 Fix crítico: forzar reconexión si se queda en signalling
-    setTimeout(() => {
-      if (connection && connection.state.status !== VoiceConnectionStatus.Ready) {
-        console.log('⚠️ Forzando reconexión...');
-        connection.rejoin();
-      }
-    }, 5000);
-  }
-
-  if (message.content === '!chillhop') {
-    if (connection) playStream(STREAMS.chillhop);
-  }
-
-  if (message.content === '!jazz') {
-    if (connection) playStream(STREAMS.jazz);
+    // Log del estado de networking interno
+    const ws = connection.state;
+    console.log('🔍 Estado completo:', JSON.stringify(ws, null, 2));
   }
 
   if (message.content === '!stop') {
     if (player) { player.stop(); player = null; }
-    if (connection) { connection.destroy(); connection = null; }
+    const connection = getVoiceConnection(message.guild.id);
+    if (connection) connection.destroy();
     message.reply('⏹️ Detenido.');
   }
 });
 
-client.once('ready', () => console.log(`✅ ${client.user.tag} conectado`));
+client.once('clientReady', () => console.log(`✅ ${client.user.tag} conectado`));
 
 client.login(process.env.DISCORD_TOKEN);
