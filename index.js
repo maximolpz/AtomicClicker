@@ -1,8 +1,13 @@
 require('dotenv').config();
 const { Client, GatewayIntentBits } = require('discord.js');
-const { Player } = require('discord-player');
-const { YoutubeiExtractor } = require('discord-player-youtubei');
-const { AttachmentExtractor } = require('@discord-player/extractor');
+const {
+  joinVoiceChannel,
+  createAudioPlayer,
+  createAudioResource,
+  AudioPlayerStatus,
+  VoiceConnectionStatus,
+  getVoiceConnection,
+} = require('@discordjs/voice');
 
 const client = new Client({
   intents: [
@@ -13,72 +18,66 @@ const client = new Client({
   ],
 });
 
-const player = new Player(client);
+const LOFI_URL = 'https://ice1.somafm.com/groovesalad-128-mp3';
+let player = null;
 
-player.events.on('playerError', (queue, error) => {
-  console.error('❌ playerError:', error.message);
-});
+function playStream(url, connection) {
+  const resource = createAudioResource(url);
+  player = createAudioPlayer();
 
-player.events.on('error', (queue, error) => {
-  console.error('❌ error:', error.message);
-});
+  player.on(AudioPlayerStatus.Playing, () => console.log('▶️  Reproduciendo...'));
+  player.on(AudioPlayerStatus.Idle, () => {
+    console.log('🔄 Reiniciando...');
+    setTimeout(() => playStream(url, connection), 3000);
+  });
+  player.on('error', (err) => {
+    console.error('❌ Error player:', err.message);
+    setTimeout(() => playStream(url, connection), 5000);
+  });
 
-player.events.on('playerStart', (queue, track) => {
-  console.log(`▶️ Reproduciendo: ${track.title}`);
-});
+  player.play(resource);
+  connection.subscribe(player);
+}
 
-player.events.on('audioTrackAdd', (queue, track) => {
-  console.log(`➕ Track agregado: ${track.title}`);
-});
+client.on('messageCreate', async (message) => {
+  if (message.author.bot) return;
 
-player.events.on('disconnect', (queue) => {
-  console.log('⚠️ Bot desconectado del canal');
-});
+  if (message.content === '!lofi') {
+    const voiceChannel = message.member?.voice?.channel;
+    if (!voiceChannel) return message.reply('❌ Entra a un canal de voz.');
 
-(async () => {
-  try {
-    await player.extractors.register(AttachmentExtractor, {});
-    await player.extractors.register(YoutubeiExtractor, {});
-    console.log(`🎵 Extractores cargados: ${player.extractors.store.size}`);
-  } catch (e) {
-    console.error('❌ Error extractores:', e.message);
+    const existing = getVoiceConnection(message.guild.id);
+    if (existing) existing.destroy();
+
+    const connection = joinVoiceChannel({
+      channelId: voiceChannel.id,
+      guildId: message.guild.id,
+      adapterCreator: message.guild.voiceAdapterCreator,
+      selfDeaf: false,
+    });
+
+    connection.on('stateChange', (oldState, newState) => {
+      console.log(`🔊 ${oldState.status} → ${newState.status}`);
+      if (newState.status === VoiceConnectionStatus.Ready) {
+        console.log('✅ Conectado, reproduciendo...');
+        playStream(LOFI_URL, connection);
+        message.reply('🎵 ¡Lofi activada! 🌙');
+      }
+      if (newState.status === VoiceConnectionStatus.Disconnected) {
+        connection.destroy();
+      }
+    });
+
+    connection.on('error', (err) => console.error('❌ Error:', err));
   }
 
-  client.once('clientReady', () => {
-    console.log(`✅ ${client.user.tag} conectado`);
-  });
+  if (message.content === '!stop') {
+    if (player) { player.stop(); player = null; }
+    const connection = getVoiceConnection(message.guild.id);
+    if (connection) connection.destroy();
+    message.reply('⏹️ Detenido.');
+  }
+});
 
-  client.on('messageCreate', async (message) => {
-    if (message.author.bot) return;
-
-    if (message.content === '!lofi') {
-      const voiceChannel = message.member?.voice?.channel;
-      if (!voiceChannel) return message.reply('❌ Entra a un canal de voz.');
-
-      try {
-        console.log('🔍 Buscando lofi...');
-        await player.play(voiceChannel, 'https://ice1.somafm.com/groovesalad-128-mp3', {
-          nodeOptions: {
-            metadata: { channel: message.channel },
-            selfDeaf: false,
-            leaveOnEmpty: false,
-            leaveOnEnd: false,
-            leaveOnStop: false,
-            volume: 80,
-          },
-        });
-        message.reply('🎵 ¡Lofi activada! 🌙');
-      } catch (err) {
-        console.error('❌ Error:', err.message);
-        message.reply('❌ Error al reproducir.');
-      }
-    }
-
-    if (message.content === '!stop') {
-      player.nodes.get(message.guild.id)?.delete();
-      message.reply('⏹️ Detenido.');
-    }
-  });
-
-  await client.login(process.env.DISCORD_TOKEN);
-})();
+client.once('clientReady', () => console.log(`✅ ${client.user.tag} conectado`));
+client.login(process.env.DISCORD_TOKEN);
