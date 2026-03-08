@@ -7,9 +7,9 @@
   },
   "dependencies": {
     "discord.js": "14.17.3",
-    "discord-player": "6.7.1",
+    "@discordjs/voice": "0.19.0",
+    "@snazzah/davey": "latest",
     "@discord-player/extractor": "4.5.0",
-    "discord-voip": "0.0.5",
     "ffmpeg-static": "5.2.0",
     "dotenv": "16.0.0",
     "opusscript": "0.0.8"
