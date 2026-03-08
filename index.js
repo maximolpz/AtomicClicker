@@ -1,7 +1,6 @@
 require('dotenv').config();
 const { Client, GatewayIntentBits } = require('discord.js');
-const { Player, QueryType } = require('discord-player');
-const { DefaultExtractors } = require('@discord-player/extractor');
+const { Player } = require('discord-player');
 
 const client = new Client({
   intents: [
@@ -14,18 +13,14 @@ const client = new Client({
 
 const player = new Player(client);
 
-const LOFI_URL = 'https://streams.ilovemusic.de/iloveradio17.mp3';
-
-async function init() {
-  await player.extractors.loadMulti(DefaultExtractors);
-  const loaded = player.extractors.store.size;
-  console.log(`🎵 Extractores cargados: ${loaded}`);
-  
-  client.login(process.env.DISCORD_TOKEN);
-}
-
-client.once('clientReady', () => {
+client.once('clientReady', async () => {
   console.log(`✅ ${client.user.tag} conectado`);
+  console.log('Node version:', process.version);
+  
+  // Cargar solo el extractor de streams directos
+  const { StreamExtractor } = await import('@discord-player/extractor');
+  await player.extractors.register(StreamExtractor, {});
+  console.log('🎵 StreamExtractor cargado');
 });
 
 client.on('messageCreate', async (message) => {
@@ -36,52 +31,24 @@ client.on('messageCreate', async (message) => {
     if (!voiceChannel) return message.reply('❌ Entra a un canal de voz primero.');
 
     try {
-      console.log('🔍 Buscando stream...');
-
-      const result = await player.search(LOFI_URL, {
-        requestedBy: message.author,
-        searchEngine: QueryType.ARBITRARY,
+      await player.play(voiceChannel, 'https://streams.ilovemusic.de/iloveradio17.mp3', {
+        nodeOptions: {
+          selfDeaf: false,
+          leaveOnEmpty: false,
+          leaveOnEnd: false,
+        },
       });
-
-      console.log('🔍 Resultado:', result?.tracks?.length, 'tracks');
-
-      if (!result || !result.tracks.length) {
-        return message.reply('❌ No se encontró el stream.');
-      }
-
-      const queue = player.nodes.create(message.guild, {
-        metadata: message,
-        selfDeaf: false,
-        leaveOnEmpty: false,
-        leaveOnEnd: false,
-        leaveOnStop: false,
-      });
-
-      if (!queue.connection) {
-        await queue.connect(voiceChannel);
-        console.log('✅ Conectado al canal de voz');
-      }
-
-      queue.addTrack(result.tracks[0]);
-
-      if (!queue.isPlaying()) {
-        await queue.node.play();
-        console.log('▶️ Reproduciendo...');
-      }
-
-      message.reply('🎵 ¡Lofi radio activada! 🌙');
-
+      message.reply('🎵 ¡Lofi activada! 🌙');
     } catch (err) {
-      console.error('❌ Error completo:', err);
-      message.reply('❌ No pude reproducir el stream.');
+      console.error('❌ Error:', err.message);
+      message.reply('❌ Error al reproducir.');
     }
   }
 
   if (message.content === '!stop') {
-    const queue = player.nodes.get(message.guild.id);
-    if (queue) queue.delete();
+    player.nodes.get(message.guild.id)?.delete();
     message.reply('⏹️ Detenido.');
   }
 });
 
-init();
+client.login(process.env.DISCORD_TOKEN);
