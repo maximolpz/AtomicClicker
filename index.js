@@ -1,7 +1,10 @@
 require('dotenv').config();
 const { Client, GatewayIntentBits } = require('discord.js');
 const { Player } = require('discord-player');
-const { DefaultExtractors } = require('@discord-player/extractor');
+const { 
+  YouTubeExtractor,
+  AttachmentExtractor
+} = require('@discord-player/extractor');
 
 const client = new Client({
   intents: [
@@ -14,12 +17,10 @@ const client = new Client({
 
 const player = new Player(client);
 
-// Cargar extractores ANTES del login
 (async () => {
   try {
-    for (const extractor of DefaultExtractors) {
-  await player.extractors.register(extractor, {});
-}
+    await player.extractors.register(AttachmentExtractor, {});
+    await player.extractors.register(YouTubeExtractor, {});
     console.log(`🎵 Extractores cargados: ${player.extractors.store.size}`);
   } catch (e) {
     console.error('❌ Error extractores:', e.message);
