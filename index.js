@@ -44,7 +44,7 @@ client.on('messageCreate', async (message) => {
       console.log('▶️ Reproduciendo:', track.title);
 
     } catch (err) {
-      console.error('❌ Error:', err.message);
+      console.error('❌ Error completo:', err);
       message.reply('❌ No pude reproducir el stream.');
     }
   }
