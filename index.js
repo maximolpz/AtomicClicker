@@ -6,6 +6,8 @@ const {
   createAudioResource,
   AudioPlayerStatus,
   VoiceConnectionStatus,
+  NoSubscriberBehavior,
+  StreamType,
   getVoiceConnection,
 } = require('@discordjs/voice');
 
@@ -22,8 +24,16 @@ const LOFI_URL = 'https://ice2.somafm.com/groovesalad-128-mp3';
 let player = null;
 
 function playStream(url, connection) {
-  const resource = createAudioResource(url);
-  player = createAudioPlayer();
+  const resource = createAudioResource(url, {
+    inputType: StreamType.Arbitrary,
+    inlineVolume: false,
+  });
+
+  player = createAudioPlayer({
+    behaviors: {
+      noSubscriber: NoSubscriberBehavior.Play,
+    },
+  });
 
   player.on(AudioPlayerStatus.Playing, () => console.log('▶️  AUDIO PLAYING'));
   player.on(AudioPlayerStatus.Buffering, () => console.log('⏳ BUFFERING...'));
@@ -60,7 +70,6 @@ client.on('messageCreate', async (message) => {
     connection.on('stateChange', (oldState, newState) => {
       console.log(`🔊 ${oldState.status} → ${newState.status}`);
 
-      // Evitar loop
       if (oldState.status === newState.status) return;
 
       if (newState.status === VoiceConnectionStatus.Ready) {
