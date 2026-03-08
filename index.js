@@ -1,10 +1,7 @@
 require('dotenv').config();
 const { Client, GatewayIntentBits } = require('discord.js');
 const { Player } = require('discord-player');
-const { 
-  YouTubeExtractor,
-  AttachmentExtractor
-} = require('@discord-player/extractor');
+const { YouTubeExtractor, AttachmentExtractor } = require('@discord-player/extractor');
 
 const client = new Client({
   intents: [
@@ -16,6 +13,27 @@ const client = new Client({
 });
 
 const player = new Player(client);
+
+// Event listeners necesarios
+player.events.on('playerError', (queue, error) => {
+  console.error('❌ playerError:', error.message);
+});
+
+player.events.on('error', (queue, error) => {
+  console.error('❌ error:', error.message);
+});
+
+player.events.on('playerStart', (queue, track) => {
+  console.log(`▶️ Reproduciendo: ${track.title}`);
+});
+
+player.events.on('audioTrackAdd', (queue, track) => {
+  console.log(`➕ Track agregado: ${track.title}`);
+});
+
+player.events.on('disconnect', (queue) => {
+  console.log('⚠️ Bot desconectado del canal');
+});
 
 (async () => {
   try {
@@ -38,18 +56,20 @@ const player = new Player(client);
       if (!voiceChannel) return message.reply('❌ Entra a un canal de voz.');
 
       try {
-        console.log('🔍 Intentando reproducir stream...');
+        console.log('🔍 Buscando lofi...');
         await player.play(voiceChannel, 'lofi hip hop radio beats to relax/study to', {
           nodeOptions: {
+            metadata: { channel: message.channel },
             selfDeaf: false,
             leaveOnEmpty: false,
             leaveOnEnd: false,
             leaveOnStop: false,
+            volume: 80,
           },
         });
         message.reply('🎵 ¡Lofi activada! 🌙');
       } catch (err) {
-        console.error('❌ Error completo:', err);
+        console.error('❌ Error:', err.message);
         message.reply('❌ Error al reproducir.');
       }
     }
