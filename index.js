@@ -9,6 +9,8 @@ const {
   getVoiceConnection,
 } = require('@discordjs/voice');
 
+process.env.DANGEROUS_ENABLE_DAVE_PROTOCOL = 'true';
+
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
