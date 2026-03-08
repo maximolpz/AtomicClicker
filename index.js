@@ -18,16 +18,17 @@ const client = new Client({
   ],
 });
 
-const LOFI_URL = 'https://ice1.somafm.com/groovesalad-128-mp3';
+const LOFI_URL = 'https://ice2.somafm.com/groovesalad-128-mp3';
 let player = null;
 
 function playStream(url, connection) {
   const resource = createAudioResource(url);
   player = createAudioPlayer();
 
-  player.on(AudioPlayerStatus.Playing, () => console.log('▶️  Reproduciendo...'));
+  player.on(AudioPlayerStatus.Playing, () => console.log('▶️  AUDIO PLAYING'));
+  player.on(AudioPlayerStatus.Buffering, () => console.log('⏳ BUFFERING...'));
   player.on(AudioPlayerStatus.Idle, () => {
-    console.log('🔄 Reiniciando...');
+    console.log('⏸️  IDLE - reiniciando...');
     setTimeout(() => playStream(url, connection), 3000);
   });
   player.on('error', (err) => {
@@ -58,6 +59,10 @@ client.on('messageCreate', async (message) => {
 
     connection.on('stateChange', (oldState, newState) => {
       console.log(`🔊 ${oldState.status} → ${newState.status}`);
+
+      // Evitar loop
+      if (oldState.status === newState.status) return;
+
       if (newState.status === VoiceConnectionStatus.Ready) {
         console.log('✅ Conectado, reproduciendo...');
         playStream(LOFI_URL, connection);
@@ -68,7 +73,7 @@ client.on('messageCreate', async (message) => {
       }
     });
 
-    connection.on('error', (err) => console.error('❌ Error:', err));
+    connection.on('error', (err) => console.error('❌ Error conexión:', err));
   }
 
   if (message.content === '!stop') {
