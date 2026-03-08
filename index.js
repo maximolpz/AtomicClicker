@@ -39,7 +39,7 @@ const player = new Player(client);
 
       try {
         console.log('🔍 Intentando reproducir stream...');
-        await player.play(voiceChannel, 'https://streams.ilovemusic.de/iloveradio17.mp3', {
+        await player.play(voiceChannel, 'lofi hip hop radio beats to relax/study to', {
           nodeOptions: {
             selfDeaf: false,
             leaveOnEmpty: false,
