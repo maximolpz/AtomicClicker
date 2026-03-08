@@ -10,6 +10,8 @@ const {
   StreamType,
   getVoiceConnection,
 } = require('@discordjs/voice');
+const { spawn } = require('child_process');
+const ffmpegPath = require('ffmpeg-static');
 
 const client = new Client({
   intents: [
@@ -22,29 +24,53 @@ const client = new Client({
 
 const LOFI_URL = 'https://ice2.somafm.com/groovesalad-128-mp3';
 let player = null;
+let currentFfmpeg = null;
 
 function playStream(url, connection) {
-  const resource = createAudioResource(url, {
-    inputType: StreamType.Arbitrary,
+  if (currentFfmpeg) {
+    currentFfmpeg.kill();
+    currentFfmpeg = null;
+  }
+
+  const ffmpeg = spawn(ffmpegPath, [
+    '-reconnect', '1',
+    '-reconnect_streamed', '1',
+    '-reconnect_delay_max', '5',
+    '-i', url,
+    '-analyzeduration', '0',
+    '-loglevel', '0',
+    '-f', 's16le',
+    '-ar', '48000',
+    '-ac', '2',
+    'pipe:1'
+  ]);
+
+  currentFfmpeg = ffmpeg;
+
+  const resource = createAudioResource(ffmpeg.stdout, {
+    inputType: StreamType.Raw,
     inlineVolume: false,
   });
 
   player = createAudioPlayer({
-    behaviors: {
-      noSubscriber: NoSubscriberBehavior.Play,
-    },
+    behaviors: { noSubscriber: NoSubscriberBehavior.Play },
   });
 
   player.on(AudioPlayerStatus.Playing, () => console.log('▶️  AUDIO PLAYING'));
   player.on(AudioPlayerStatus.Buffering, () => console.log('⏳ BUFFERING...'));
   player.on(AudioPlayerStatus.Idle, () => {
     console.log('⏸️  IDLE - reiniciando...');
+    ffmpeg.kill();
     setTimeout(() => playStream(url, connection), 3000);
   });
   player.on('error', (err) => {
     console.error('❌ Error player:', err.message);
+    ffmpeg.kill();
     setTimeout(() => playStream(url, connection), 5000);
   });
+
+  ffmpeg.stderr.on('data', (data) => console.error('ffmpeg:', data.toString()));
+  ffmpeg.on('close', (code) => console.log(`ffmpeg cerrado con código ${code}`));
 
   player.play(resource);
   connection.subscribe(player);
@@ -86,6 +112,7 @@ client.on('messageCreate', async (message) => {
   }
 
   if (message.content === '!stop') {
+    if (currentFfmpeg) { currentFfmpeg.kill(); currentFfmpeg = null; }
     if (player) { player.stop(); player = null; }
     const connection = getVoiceConnection(message.guild.id);
     if (connection) connection.destroy();
