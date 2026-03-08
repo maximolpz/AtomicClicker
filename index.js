@@ -1,6 +1,6 @@
 require('dotenv').config();
 const { Client, GatewayIntentBits } = require('discord.js');
-const { Player } = require('discord-player');
+const { Player, QueryType } = require('discord-player');
 const { DefaultExtractors } = require('@discord-player/extractor');
 
 const client = new Client({
@@ -16,10 +16,16 @@ const player = new Player(client);
 
 const LOFI_URL = 'https://streams.ilovemusic.de/iloveradio17.mp3';
 
-client.once('clientReady', async () => {
-  console.log(`✅ ${client.user.tag} conectado`);
+async function init() {
   await player.extractors.loadMulti(DefaultExtractors);
-  console.log('🎵 Extractores cargados');
+  const loaded = player.extractors.store.size;
+  console.log(`🎵 Extractores cargados: ${loaded}`);
+  
+  client.login(process.env.DISCORD_TOKEN);
+}
+
+client.once('clientReady', () => {
+  console.log(`✅ ${client.user.tag} conectado`);
 });
 
 client.on('messageCreate', async (message) => {
@@ -30,18 +36,40 @@ client.on('messageCreate', async (message) => {
     if (!voiceChannel) return message.reply('❌ Entra a un canal de voz primero.');
 
     try {
-      const { track } = await player.play(voiceChannel, LOFI_URL, {
-        nodeOptions: {
-          metadata: message,
-          selfDeaf: false,
-          leaveOnEmpty: false,
-          leaveOnEnd: false,
-          leaveOnStop: false,
-        },
+      console.log('🔍 Buscando stream...');
+
+      const result = await player.search(LOFI_URL, {
+        requestedBy: message.author,
+        searchEngine: QueryType.ARBITRARY,
       });
 
-      message.reply(`🎵 ¡Lofi radio activada! 🌙`);
-      console.log('▶️ Reproduciendo:', track.title);
+      console.log('🔍 Resultado:', result?.tracks?.length, 'tracks');
+
+      if (!result || !result.tracks.length) {
+        return message.reply('❌ No se encontró el stream.');
+      }
+
+      const queue = player.nodes.create(message.guild, {
+        metadata: message,
+        selfDeaf: false,
+        leaveOnEmpty: false,
+        leaveOnEnd: false,
+        leaveOnStop: false,
+      });
+
+      if (!queue.connection) {
+        await queue.connect(voiceChannel);
+        console.log('✅ Conectado al canal de voz');
+      }
+
+      queue.addTrack(result.tracks[0]);
+
+      if (!queue.isPlaying()) {
+        await queue.node.play();
+        console.log('▶️ Reproduciendo...');
+      }
+
+      message.reply('🎵 ¡Lofi radio activada! 🌙');
 
     } catch (err) {
       console.error('❌ Error completo:', err);
@@ -56,4 +84,4 @@ client.on('messageCreate', async (message) => {
   }
 });
 
-client.login(process.env.DISCORD_TOKEN);
+init();
