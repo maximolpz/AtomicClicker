@@ -2,6 +2,7 @@ require('dotenv').config();
 const { Client, GatewayIntentBits } = require('discord.js');
 const { Player } = require('discord-player');
 const { YoutubeiExtractor } = require('discord-player-youtubei');
+const { AttachmentExtractor } = require('@discord-player/extractor');
 
 const client = new Client({
   intents: [
@@ -36,6 +37,7 @@ player.events.on('disconnect', (queue) => {
 
 (async () => {
   try {
+    await player.extractors.register(AttachmentExtractor, {});
     await player.extractors.register(YoutubeiExtractor, {});
     console.log(`🎵 Extractores cargados: ${player.extractors.store.size}`);
   } catch (e) {
@@ -55,7 +57,7 @@ player.events.on('disconnect', (queue) => {
 
       try {
         console.log('🔍 Buscando lofi...');
-        await player.play(voiceChannel, 'lofi hip hop radio beats to relax/study to', {
+        await player.play(voiceChannel, 'https://streams.ilovemusic.de/iloveradio17.mp3', {
           nodeOptions: {
             metadata: { channel: message.channel },
             selfDeaf: false,
