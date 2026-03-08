@@ -14,43 +14,48 @@ const client = new Client({
 
 const player = new Player(client);
 
-client.once('clientReady', async () => {
-  console.log(`✅ ${client.user.tag} conectado`);
+// Cargar extractores ANTES del login
+(async () => {
   try {
     await player.extractors.loadMulti(DefaultExtractors);
-    console.log(`🎵 Extractores: ${player.extractors.store.size}`);
+    console.log(`🎵 Extractores cargados: ${player.extractors.store.size}`);
   } catch (e) {
     console.error('❌ Error extractores:', e.message);
   }
-});
 
-client.on('messageCreate', async (message) => {
-  if (message.author.bot) return;
+  client.once('clientReady', () => {
+    console.log(`✅ ${client.user.tag} conectado`);
+  });
 
-  if (message.content === '!lofi') {
-    const voiceChannel = message.member?.voice?.channel;
-    if (!voiceChannel) return message.reply('❌ Entra a un canal de voz.');
+  client.on('messageCreate', async (message) => {
+    if (message.author.bot) return;
 
-    try {
-      await player.play(voiceChannel, 'https://streams.ilovemusic.de/iloveradio17.mp3', {
-        nodeOptions: {
-          selfDeaf: false,
-          leaveOnEmpty: false,
-          leaveOnEnd: false,
-          leaveOnStop: false,
-        },
-      });
-      message.reply('🎵 ¡Lofi activada! 🌙');
-    } catch (err) {
-      console.error('❌ Error completo:', err);
-      message.reply('❌ Error al reproducir.');
+    if (message.content === '!lofi') {
+      const voiceChannel = message.member?.voice?.channel;
+      if (!voiceChannel) return message.reply('❌ Entra a un canal de voz.');
+
+      try {
+        console.log('🔍 Intentando reproducir stream...');
+        await player.play(voiceChannel, 'https://streams.ilovemusic.de/iloveradio17.mp3', {
+          nodeOptions: {
+            selfDeaf: false,
+            leaveOnEmpty: false,
+            leaveOnEnd: false,
+            leaveOnStop: false,
+          },
+        });
+        message.reply('🎵 ¡Lofi activada! 🌙');
+      } catch (err) {
+        console.error('❌ Error completo:', err);
+        message.reply('❌ Error al reproducir.');
+      }
     }
-  }
 
-  if (message.content === '!stop') {
-    player.nodes.get(message.guild.id)?.delete();
-    message.reply('⏹️ Detenido.');
-  }
-});
+    if (message.content === '!stop') {
+      player.nodes.get(message.guild.id)?.delete();
+      message.reply('⏹️ Detenido.');
+    }
+  });
 
-client.login(process.env.DISCORD_TOKEN);
+  await client.login(process.env.DISCORD_TOKEN);
+})();
