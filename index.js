@@ -1,7 +1,7 @@
 require('dotenv').config();
 const { Client, GatewayIntentBits } = require('discord.js');
 const { Player } = require('discord-player');
-const { YouTubeExtractor, AttachmentExtractor } = require('@discord-player/extractor');
+const { YoutubeiExtractor } = require('discord-player-youtubei');
 
 const client = new Client({
   intents: [
@@ -14,7 +14,6 @@ const client = new Client({
 
 const player = new Player(client);
 
-// Event listeners necesarios
 player.events.on('playerError', (queue, error) => {
   console.error('❌ playerError:', error.message);
 });
@@ -37,8 +36,7 @@ player.events.on('disconnect', (queue) => {
 
 (async () => {
   try {
-    await player.extractors.register(AttachmentExtractor, {});
-    await player.extractors.register(YouTubeExtractor, {});
+    await player.extractors.register(YoutubeiExtractor, {});
     console.log(`🎵 Extractores cargados: ${player.extractors.store.size}`);
   } catch (e) {
     console.error('❌ Error extractores:', e.message);
