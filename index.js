@@ -57,7 +57,7 @@ player.events.on('disconnect', (queue) => {
 
       try {
         console.log('🔍 Buscando lofi...');
-        await player.play(voiceChannel, 'https://streams.ilovemusic.de/iloveradio17.mp3', {
+        await player.play(voiceChannel, 'https://ice1.somafm.com/groovesalad-128-mp3', {
           nodeOptions: {
             metadata: { channel: message.channel },
             selfDeaf: false,
