@@ -1,15 +1,7 @@
 require('dotenv').config();
-const { Client, GatewayIntentBits, Events } = require('discord.js');
-const {
-  joinVoiceChannel,
-  createAudioPlayer,
-  createAudioResource,
-  AudioPlayerStatus,
-  VoiceConnectionStatus,
-  getVoiceConnection,
-} = require('@discordjs/voice');
-
-process.env.DANGEROUS_ENABLE_DAVE_PROTOCOL = 'true';
+const { Client, GatewayIntentBits } = require('discord.js');
+const { Player } = require('discord-player');
+const { DefaultExtractors } = require('@discord-player/extractor');
 
 const client = new Client({
   intents: [
@@ -20,26 +12,15 @@ const client = new Client({
   ],
 });
 
+const player = new Player(client);
+
 const LOFI_URL = 'https://streams.ilovemusic.de/iloveradio17.mp3';
-let player = null;
 
-function playStream(url, connection) {
-  const resource = createAudioResource(url);
-  player = createAudioPlayer();
-
-  player.on(AudioPlayerStatus.Playing, () => console.log('▶️  Reproduciendo...'));
-  player.on(AudioPlayerStatus.Idle, () => {
-    console.log('🔄 Reiniciando...');
-    setTimeout(() => playStream(url, connection), 3000);
-  });
-  player.on('error', (err) => {
-    console.error('❌ Error player:', err.message);
-    setTimeout(() => playStream(url, connection), 5000);
-  });
-
-  player.play(resource);
-  connection.subscribe(player);
-}
+client.once('clientReady', async () => {
+  console.log(`✅ ${client.user.tag} conectado`);
+  await player.extractors.loadMulti(DefaultExtractors);
+  console.log('🎵 Extractores cargados');
+});
 
 client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
@@ -48,41 +29,31 @@ client.on('messageCreate', async (message) => {
     const voiceChannel = message.member?.voice?.channel;
     if (!voiceChannel) return message.reply('❌ Entra a un canal de voz primero.');
 
-    const existingConnection = getVoiceConnection(message.guild.id);
-    if (existingConnection) existingConnection.destroy();
+    try {
+      const { track } = await player.play(voiceChannel, LOFI_URL, {
+        nodeOptions: {
+          metadata: message,
+          selfDeaf: false,
+          leaveOnEmpty: false,
+          leaveOnEnd: false,
+          leaveOnStop: false,
+        },
+      });
 
-    const connection = joinVoiceChannel({
-      channelId: voiceChannel.id,
-      guildId: message.guild.id,
-      adapterCreator: message.guild.voiceAdapterCreator,
-      selfDeaf: false,
-      selfMute: false,
-    });
+      message.reply(`🎵 ¡Lofi radio activada! 🌙`);
+      console.log('▶️ Reproduciendo:', track.title);
 
-    connection.on('stateChange', (oldState, newState) => {
-      console.log(`🔊 ${oldState.status} → ${newState.status}`);
-
-      if (newState.status === VoiceConnectionStatus.Ready) {
-        console.log('✅ Listo, reproduciendo...');
-        playStream(LOFI_URL, connection);
-        message.reply('🎵 ¡Lofi radio activada! 🌙');
-      }
-
-      if (newState.status === VoiceConnectionStatus.Disconnected) {
-        connection.destroy();
-      }
-    });
-
-    connection.on('error', (err) => console.error('❌ Error:', err));
+    } catch (err) {
+      console.error('❌ Error:', err.message);
+      message.reply('❌ No pude reproducir el stream.');
+    }
   }
 
   if (message.content === '!stop') {
-    if (player) { player.stop(); player = null; }
-    const connection = getVoiceConnection(message.guild.id);
-    if (connection) connection.destroy();
+    const queue = player.nodes.get(message.guild.id);
+    if (queue) queue.delete();
     message.reply('⏹️ Detenido.');
   }
 });
 
-client.once('clientReady', () => console.log(`✅ ${client.user.tag} conectado`));
 client.login(process.env.DISCORD_TOKEN);
