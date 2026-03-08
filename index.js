@@ -17,7 +17,9 @@ const player = new Player(client);
 // Cargar extractores ANTES del login
 (async () => {
   try {
-    await player.extractors.loadMulti(DefaultExtractors);
+    for (const extractor of DefaultExtractors) {
+  await player.extractors.register(extractor, {});
+}
     console.log(`🎵 Extractores cargados: ${player.extractors.store.size}`);
   } catch (e) {
     console.error('❌ Error extractores:', e.message);
