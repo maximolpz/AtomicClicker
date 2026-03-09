@@ -22,7 +22,7 @@ const client = new Client({
   ],
 });
 
-const LOFI_URL = 'https://ice2.somafm.com/groovesalad-128-mp3';
+const LOFI_URL = 'http://direct.fipradio.fr/live/fip-webradio2.mp3';
 let player = null;
 let currentFfmpeg = null;
 
