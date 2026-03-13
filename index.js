@@ -88,9 +88,10 @@ client.on('messageCreate', async (message) => {
 
     const connection = joinVoiceChannel({
       channelId: voiceChannel.id,
-      guildId: message.guild.id,
-      adapterCreator: message.guild.voiceAdapterCreator,
-      selfDeaf: false,
+  guildId: message.guild.id,
+  adapterCreator: message.guild.voiceAdapterCreator,
+  selfDeaf: true, // <--- Añade esto
+  debug: true     // <--- Añade esto temporalmente para ver más logs
     });
 
     connection.on('stateChange', (oldState, newState) => {
