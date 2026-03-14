@@ -9,9 +9,14 @@ const {
   NoSubscriberBehavior,
   StreamType,
   getVoiceConnection,
+  entersState,
 } = require('@discordjs/voice');
 const { spawn } = require('child_process');
 const ffmpegPath = require('ffmpeg-static');
+const dns = require('dns');
+
+// PARCHE 1: Forzar IPv4 para evitar problemas de resolución en datacenters
+dns.setDefaultResultOrder('ipv4first');
 
 const client = new Client({
   intents: [
@@ -22,16 +27,21 @@ const client = new Client({
   ],
 });
 
-const LOFI_URL = 'http://direct.fipradio.fr/live/fip-webradio2.mp3';
+// Usamos una URL directa y robusta de FIP Radio (Lofi/Chill)
+const LOFI_URL = 'http://icecast.radiofrance.fr/fip-midfi.mp3';
 let player = null;
 let currentFfmpeg = null;
 
+/**
+ * Función para gestionar la reproducción del stream vía FFmpeg
+ */
 function playStream(url, connection) {
   if (currentFfmpeg) {
     currentFfmpeg.kill();
     currentFfmpeg = null;
   }
 
+  // Banderas de FFmpeg optimizadas para reconexión y bajo consumo
   const ffmpeg = spawn(ffmpegPath, [
     '-reconnect', '1',
     '-reconnect_streamed', '1',
@@ -56,33 +66,38 @@ function playStream(url, connection) {
     behaviors: { noSubscriber: NoSubscriberBehavior.Play },
   });
 
-  player.on(AudioPlayerStatus.Playing, () => console.log('▶️  AUDIO PLAYING'));
-  player.on(AudioPlayerStatus.Buffering, () => console.log('⏳ BUFFERING...'));
+  player.on(AudioPlayerStatus.Playing, () => console.log('▶️ AUDIO PLAYING'));
+  
   player.on(AudioPlayerStatus.Idle, () => {
-    console.log('⏸️  IDLE - reiniciando...');
+    console.log('⏸️ IDLE - Reiniciando stream...');
     ffmpeg.kill();
-    setTimeout(() => playStream(url, connection), 3000);
-  });
-  player.on('error', (err) => {
-    console.error('❌ Error player:', err.message);
-    ffmpeg.kill();
-    setTimeout(() => playStream(url, connection), 5000);
+    setTimeout(() => {
+        if (getVoiceConnection(connection.joinConfig.guildId)) {
+            playStream(url, connection);
+        }
+    }, 3000);
   });
 
-  ffmpeg.stderr.on('data', (data) => console.error('ffmpeg:', data.toString()));
-  ffmpeg.on('close', (code) => console.log(`ffmpeg cerrado con código ${code}`));
+  player.on('error', (err) => {
+    console.error('❌ Error en el reproductor:', err.message);
+    ffmpeg.kill();
+  });
 
   player.play(resource);
   connection.subscribe(player);
 }
 
+/**
+ * Lógica principal de comandos
+ */
 client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
 
   if (message.content === '!lofi') {
     const voiceChannel = message.member?.voice?.channel;
-    if (!voiceChannel) return message.reply('❌ Entra a un canal de voz.');
+    if (!voiceChannel) return message.reply('❌ Debes estar en un canal de voz.');
 
+    // Limpiar conexión previa si existe
     const existing = getVoiceConnection(message.guild.id);
     if (existing) existing.destroy();
 
@@ -91,35 +106,42 @@ client.on('messageCreate', async (message) => {
       guildId: message.guild.id,
       adapterCreator: message.guild.voiceAdapterCreator,
       selfDeaf: true,
-      group: client.user.id
     });
 
+    try {
+      // PARCHE 2: Esperar activamente a que la conexión esté lista (Máximo 15 seg)
+      console.log('⏳ Intentando conectar al canal de voz...');
+      await entersState(connection, VoiceConnectionStatus.Ready, 15_000);
+      
+      console.log('✅ Conexión establecida con éxito.');
+      playStream(LOFI_URL, connection);
+      message.reply('🎵 **Lofi 24/7 activada.** ¡A disfrutar!');
+      
+    } catch (error) {
+      console.error('❌ Error de conexión (Timeout):', error);
+      connection.destroy();
+      message.reply('❌ No se pudo conectar. Discord o Railway están bloqueando la conexión UDP.');
+    }
+
+    // Monitor de estado
     connection.on('stateChange', (oldState, newState) => {
-      console.log(`🔊 ${oldState.status} → ${newState.status}`);
-
-      if (oldState.status === newState.status) return;
-
-      if (newState.status === VoiceConnectionStatus.Ready) {
-        console.log('✅ Conectado, reproduciendo...');
-        playStream(LOFI_URL, connection);
-        message.reply('🎵 ¡Lofi activada! 🌙');
-      }
+      console.log(`🔊 Estado: ${oldState.status} → ${newState.status}`);
       if (newState.status === VoiceConnectionStatus.Disconnected) {
         connection.destroy();
       }
     });
-
-    connection.on('error', (err) => console.error('❌ Error conexión:', err));
   }
 
   if (message.content === '!stop') {
-    if (currentFfmpeg) { currentFfmpeg.kill(); currentFfmpeg = null; }
-    if (player) { player.stop(); player = null; }
+    if (currentFfmpeg) currentFfmpeg.kill();
     const connection = getVoiceConnection(message.guild.id);
     if (connection) connection.destroy();
-    message.reply('⏹️ Detenido.');
+    message.reply('⏹️ Bot desconectado.');
   }
 });
 
-client.once('clientReady', () => console.log(`✅ ${client.user.tag} conectado`));
+client.once('ready', () => {
+  console.log(`✅ Logueado como ${client.user.tag}`);
+});
+
 client.login(process.env.DISCORD_TOKEN);
