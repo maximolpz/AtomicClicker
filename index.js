@@ -1,69 +1,383 @@
-require('dotenv').config();
-const { Client, GatewayIntentBits } = require('discord.js');
-const {
-  joinVoiceChannel,
-  createAudioPlayer,
-  createAudioResource,
-  AudioPlayerStatus,
-  NoSubscriberBehavior,
-  StreamType,
-} = require('@discordjs/voice');
-const { spawn } = require('child_process');
-const ffmpegPath = require('ffmpeg-static');
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AETERNA CORE: PROTOCOLO X-88</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Special+Elite&family=Kanit:wght@300;600;900&family=Fira+Code:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --gold: #FFD700;
+            --debt: #FF0044;
+            --accent: #00E5FF;
+            --bg: #050505;
+            --paper: #E3D9C3;
+            --button-off: #1A1A1A;
+            --shadow: 0 0 20px rgba(0, 229, 255, 0.2);
+        }
 
-const client = new Client({
-  intents: [
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildVoiceStates,
-    GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent
-  ]
-});
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            background-color: var(--bg); color: #E2E8F0;
+            font-family: 'Kanit', sans-serif; height: 100vh;
+            overflow: hidden; display: flex; flex-direction: column; align-items: center; user-select: none;
+        }
 
-// URL DIRECTA - Aquí está la magia
-const AUDIO_URL = 'https://data.freetouse.com/music/tracks/1028a982-25d2-9b50-71a8-dbc9a3c7cb81/file/mp3';
+        /* PANTALLA DE INICIO */
+        #intro-screen {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: radial-gradient(circle at center, #111 0%, #000 100%);
+            z-index: 2000; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 40px;
+        }
 
-const player = createAudioPlayer({
-  behaviors: { noSubscriber: NoSubscriberBehavior.Play }
-});
+        .contract-paper {
+            max-width: 600px; background: var(--paper); color: #1A1A1B; padding: 40px;
+            border-radius: 2px; box-shadow: 0 30px 60px rgba(0,0,0,0.8);
+            font-family: 'Special Elite', cursive; position: relative; border: 1px solid #C0B283;
+        }
 
-function playStream(connection, url) {
-  const ffmpeg = spawn(ffmpegPath, [
-    '-i', url,
-    '-f', 's16le',
-    '-ar', '48000',
-    '-ac', '2',
-    'pipe:1'
-  ]);
+        .contract-paper h3 { text-align: center; font-size: 1.6rem; margin-bottom: 20px; color: #B00000; text-transform: uppercase; border-bottom: 2px solid #333; padding-bottom: 10px; }
+        .contract-paper p { font-size: 1.05rem; line-height: 1.4; text-align: justify; }
 
-  const resource = createAudioResource(ffmpeg.stdout, {
-    inputType: StreamType.Raw,
-    inlineVolume: true
-  });
+        .stamp {
+            position: absolute; bottom: 10px; right: 30px; width: 150px; height: 150px;
+            border: 10px solid; border-radius: 50%; display: none; justify-content: center; align-items: center;
+            font-weight: 900; font-size: 1.4rem; transform: rotate(-25deg); z-index: 10;
+        }
+        .stamp-accepted { border-color: #006400; color: #006400; }
+        .stamp-declined { border-color: #8B0000; color: #8B0000; }
 
-  resource.volume.setVolume(0.8);
-  connection.subscribe(player);
-  player.play(resource);
-}
+        .btn-intro { padding: 18px 40px; font-weight: 900; cursor: pointer; border: none; font-size: 1.1rem; text-transform: uppercase; letter-spacing: 2px; margin: 20px 10px; transition: 0.3s; }
+        .btn-accept { background: #006400; color: white; }
+        .btn-decline { background: #8B0000; color: white; }
+        .btn-start-final { background: white; color: black; display: none; padding: 20px 50px; font-size: 1.5rem; margin-top: 20px; font-weight: 900; cursor: pointer; border: 2px solid var(--accent); }
 
-client.on('messageCreate', async (message) => {
-  if (message.author.bot) return;
+        /* JUEGO */
+        #game-container { display: none; flex-direction: column; width: 100%; max-width: 1200px; }
+        #debt-header { width: 100%; background: #0A0A0A; border-bottom: 4px solid var(--debt); padding: 15px 0; display: flex; flex-direction: column; align-items: center; position: relative; }
+        .timer-huge { font-size: 4rem; font-weight: 900; line-height: 1; }
+        .time-bar-bg { width: 100%; height: 5px; background: #222; position: absolute; bottom: 0; }
+        #time-bar-fill { height: 100%; width: 100%; background: var(--debt); transition: width 1s linear; }
 
-  if (message.content === '!play') {
-    const channel = message.member?.voice?.channel;
-    if (!channel) return message.reply('❌ ¡Entra a un canal de voz!');
+        #msg-console { width: 100%; height: 45px; background: #000; color: var(--accent); font-family: 'Fira Code', monospace; display: flex; align-items: center; justify-content: center; font-size: 0.85rem; border-bottom: 1px solid #222; }
 
-    const connection = joinVoiceChannel({
-      channelId: channel.id,
-      guildId: message.guild.id,
-      adapterCreator: message.guild.voiceAdapterCreator,
-      selfDeaf: false,
-    });
+        .main-display { display: grid; grid-template-columns: 1fr 2fr 1fr; padding: 25px; gap: 30px; align-items: center; }
+        .stat-card { background: #111; padding: 20px; border-radius: 8px; text-align: center; }
+        .stat-label { font-size: 0.75rem; color: #555; text-transform: uppercase; }
+        .stat-val { font-size: 2.2rem; font-weight: 900; }
 
-    playStream(connection, AUDIO_URL);
-    message.reply('🎵 Reproduciendo **Bread (Lukrembo)** en el servidor...');
-  }
-});
+        #pit-wrapper { position: relative; width: 220px; height: 220px; display: flex; justify-content: center; align-items: center; justify-self: center; }
+        .progress-ring { position: absolute; width: 215px; height: 215px; border-radius: 50%; background: conic-gradient(var(--accent) 0%, #151515 0%); }
+        #hole { position: relative; width: 170px; height: 170px; border-radius: 50%; background: #FFF; border: 8px solid var(--bg); display: flex; justify-content: center; align-items: center; z-index: 2; cursor: pointer; transition: 0.05s; }
+        #hole svg { width: 80px; height: 80px; fill: #222; }
+        #hole:active { transform: scale(0.92); }
 
-client.once('ready', (c) => console.log(`✅ Bot en línea como: ${c.user.tag}`));
-client.login(process.env.DISCORD_TOKEN);
+        /* TIENDA */
+        .shop-area { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; width: 90%; max-width: 900px; margin: 0 auto; }
+        .upgrade-card { background: #0A0A0A; border: 1px solid #222; padding: 15px; border-radius: 4px; text-align: center; }
+        .upgrade-card h4 { font-size: 0.7rem; color: #555; margin-bottom: 10px; }
+        .upgrade-card .val { font-size: 1.3rem; font-weight: 900; margin-bottom: 8px; }
+
+        .buy-btn { width: 100%; padding: 12px; border: 1px solid transparent; font-weight: 900; background: var(--button-off); color: #444; font-size: 0.75rem; cursor: not-allowed; transition: 0.3s; }
+        .buy-btn.active { background: #222; color: var(--accent); border: 1px solid var(--accent); cursor: pointer; box-shadow: var(--shadow); }
+        .buy-btn.active:hover { background: var(--accent); color: #000; }
+
+        .pay-btn-massive { grid-column: span 3; background: #111; color: #333; padding: 20px; font-size: 1.2rem; font-weight: 900; border: none; margin-top: 10px; cursor: not-allowed; transition: 0.3s; }
+        .pay-btn-massive.active { background: var(--debt); color: #FFF; cursor: pointer; box-shadow: 0 0 30px rgba(255, 0, 68, 0.4); }
+
+        #event-overlay { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 1500; font-size: 2.5rem; font-weight: 900; text-align: center; pointer-events: none; opacity: 0; transition: 0.4s; text-shadow: 0 0 20px black; }
+        #game-over { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.98); z-index: 3000; display: none; flex-direction: column; justify-content: center; align-items: center; text-align: center; }
+
+        @keyframes stamp-pop { 0% { transform: scale(4) rotate(0deg); opacity: 0; } 100% { transform: scale(1) rotate(-25deg); opacity: 0.8; } }
+        @keyframes fUp { to { transform: translate(-50%, -100px); opacity: 0; } }
+        .panic-mode { animation: panic-bg 0.5s infinite; }
+        @keyframes panic-bg { 0% { background: #050505; } 50% { background: #2A0008; } 100% { background: #050505; } }
+    </style>
+</head>
+<body>
+
+    <div id="intro-screen">
+        <div class="contract-paper">
+            <h3>AVISO DE EMERGENCIA: REFUGIO X-88</h3>
+            <p>
+                Tras el atentado atómico, los niveles de radiación en superficie son críticos. Los filtros de aire y las raciones de suministros de comida son propiedad de AETERNA CORE.
+                <br><br>
+                Se te presenta la opción de descender a las brechas, extraer recursos y entregarlos a cambio de créditos, con los que podrías cubrir tus deudas y asegurar el acceso a suministros esenciales… o rechazar el acuerdo y afrontar sus consecuencias. 
+                <br><br>
+                <strong style="color: #B00000;">ADVERTENCIA:</strong> Si la cuota no se paga, el suministro se cortará de inmediato. No hay segundas oportunidades.
+            </p>
+            <div id="stamp-accepted" class="stamp stamp-accepted">ACEPTADO</div>
+            <div id="stamp-declined" class="stamp stamp-declined">RECHAZADO</div>
+        </div>
+        <div id="intro-btns">
+            <button class="btn-intro btn-accept" onclick="processContract(true)">ACEPTAR LABOR</button>
+            <button class="btn-intro btn-decline" onclick="processContract(false)">RECLINAR</button>
+        </div>
+        <button id="btn-final-start" class="btn-start-final" onclick="startGame()">DESCENDER</button>
+        <p id="recline-msg" style="display:none; color: #FF4444; margin-top: 30px; font-family: 'Fira Code'; max-width: 500px; text-align: center;"></p>
+    </div>
+
+    <div id="game-over">
+        <h1 style="color: var(--debt); font-size: 3.5rem;">SISTEMA CRÍTICO</h1>
+        <p id="over-reason" style="font-size: 1.3rem; margin: 20px; color: #AAA; max-width: 600px;"></p>
+        <button onclick="location.reload()" style="padding: 15px 40px; font-weight: 900; cursor: pointer;">REINTENTAR</button>
+    </div>
+
+    <div id="event-overlay">EVENTO DETECTADO</div>
+
+    <div id="game-container">
+        <div id="debt-header">
+            <div class="stat-label" style="color: #666;">SUMINISTRO RESTANTE</div>
+            <div id="timer-display" class="timer-huge">03:00</div>
+            <div id="debt-val-display" style="color: var(--debt); font-weight: 900; margin-top: 5px;">CUOTA: 25 🪙</div>
+            <div class="time-bar-bg"><div id="time-bar-fill"></div></div>
+        </div>
+        <div id="msg-console">... ESTABLECIENDO CONEXIÓN CON AETERNA CORE ...</div>
+        <div class="main-display">
+            <div class="stat-card">
+                <div class="stat-label">Profundidad</div>
+                <div id="depth-display" class="stat-val">0m</div>
+            </div>
+            <div id="pit-wrapper">
+                <div class="progress-ring" id="ring"></div>
+                <div id="hole">
+                    <svg id="tool-svg" viewBox="0 0 24 24"><path d="M14.7,1.3c-0.4-0.4-1-0.4-1.4,0L4,10.6L2.6,9.2C2.2,8.8,1.6,8.8,1.2,9.2s-0.4,1,0,1.4l2.1,2.1l-2,2 c-0.4,0.4-0.4,1,0,1.4l2,2l-2,2c-0.4,0.4-0.4,1,0,1.4s1,0.4,1.4,0l2-2l2,2c0.4,0.4,1,0.4,1.4,0s0.4-1,0-1.4l-2-2l2-2l2.1,2.1 c0.4,0.4,1,0.4,1.4,0s0.4-1,0-1.4L11,13.4l9.3-9.3c0.4-0.4,0.4-1,0-1.4L14.7,1.3z"/></svg>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Créditos</div>
+                <div id="coins-display" class="stat-val" style="color: var(--gold)">0</div>
+            </div>
+        </div>
+        <div class="shop-area">
+            <div class="upgrade-card">
+                <h4>PODER EXCAVACIÓN</h4>
+                <div class="val" id="lvl-pwr">1</div>
+                <button class="buy-btn" id="btn-power" onclick="buy('power')">CARGANDO...</button>
+            </div>
+            <div class="upgrade-card">
+                <h4>MÓDULO IMÁN</h4>
+                <div class="val" id="lvl-luck">10%</div>
+                <button class="buy-btn" id="btn-luck" onclick="buy('luck')">CARGANDO...</button>
+            </div>
+            <div class="upgrade-card">
+                <h4>DRON MINERO</h4>
+                <div class="val" id="lvl-auto">0 /s</div>
+                <button class="buy-btn" id="btn-auto" onclick="buy('auto')">CARGANDO...</button>
+            </div>
+            <button id="btn-pay-debt" class="pay-btn-massive" onclick="payDebt()">SALDAR DEUDA OPERATIVA</button>
+        </div>
+    </div>
+
+    <script>
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+        // NUEVA FUNCIÓN SFX PESADA (GOLPE DE SELLO)
+        function playThud() {
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = 'sine'; 
+            osc.frequency.setValueAtTime(120, audioCtx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(1, audioCtx.currentTime + 0.4);
+            gain.gain.setValueAtTime(0.5, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.4);
+            osc.connect(gain); gain.connect(audioCtx.destination);
+            osc.start(); osc.stop(audioCtx.currentTime + 0.4);
+        }
+
+        function playGeiger() {
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = 'square'; osc.frequency.setValueAtTime(1500, audioCtx.currentTime);
+            gain.gain.setValueAtTime(0.02, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.01);
+            osc.connect(gain); gain.connect(audioCtx.destination);
+            osc.start(); osc.stop(audioCtx.currentTime + 0.01);
+        }
+
+        let game = { started: false, depth: 0, coins: 0, power: 1, luck: 10, auto: 0, costs: { power: 10, luck: 25, auto: 50 }, debt: 25, timeLeft: 180, mod: 1, event: false };
+
+        const tools = [
+            '<path d="M14.7,1.3c-0.4-0.4-1-0.4-1.4,0L4,10.6L2.6,9.2C2.2,8.8,1.6,8.8,1.2,9.2s-0.4,1,0,1.4l2.1,2.1l-2,2 c-0.4,0.4-0.4,1,0,1.4l2,2l-2,2c-0.4,0.4-0.4,1,0,1.4s1,0.4,1.4,0l2-2l2,2c0.4,0.4,1,0.4,1.4,0s0.4-1,0-1.4l-2-2l2-2l2.1,2.1 c0.4,0.4,1,0.4,1.4,0s0.4-1,0-1.4L11,13.4l9.3-9.3c0.4-0.4,0.4-1,0-1.4L14.7,1.3z"/>',
+            '<path d="M21,16.5c0-0.8-0.7-1.5-1.5-1.5h-2.2l-3.8-3.8V7.5c0-0.8-0.7-1.5-1.5-1.5S10.5,6.7,10.5,7.5v3.7L6.7,15H4.5 C3.7,15,3,15.7,3,16.5S3.7,18,4.5,18h15C20.3,18,21,17.3,21,16.5z M12,2c-1.1,0-2,0.9-2,2s0.9,2,2,2s2-0.9,2-2S13.1,2,12,2z"/>',
+            '<path d="M19,2h-4c-1.1,0-2,0.9-2,2v2h-2V4c0-1.1-0.9-2-2-2H5C3.9,2,3,2.9,3,4v14c0,1.1,0.9,2,2,2h4c1.1,0,2-0.9,2-2v-2h2v2 c0,1.1,0.9,2,2,2h4c1.1,0,2-0.9,2-2V4C21,2.9,20.1,2,19,2z M9,18H5V4h4V18z M19,18h-4V4h4V18z"/>'
+        ];
+
+        const consoleTexts = ["SENSORES: Nivel de radiación 450mSv. Crítico.", "AVISO: Estructura geológica inestable detectada.", "MENSAJE: ¿Hay alguien más ahí arriba?", "REPORTE: Oxígeno al 88%. Filtros saturados.", "DATOS: Agua subterránea contaminada detectada.", "ESTADO: Aeterna Core observa tu productividad."];
+
+        function processContract(ok) {
+            document.getElementById('intro-btns').style.display = 'none';
+            playThud(); // USAR GOLPE PESADO
+            if(ok) {
+                const s = document.getElementById('stamp-accepted');
+                s.style.display = 'flex'; s.style.animation = 'stamp-pop 0.3s forwards';
+                setTimeout(()=> document.getElementById('btn-final-start').style.display='block', 600);
+            } else {
+                const s = document.getElementById('stamp-declined');
+                s.style.display = 'flex'; s.style.animation = 'stamp-pop 0.3s forwards';
+                setTimeout(()=> {
+                    const m = document.getElementById('recline-msg');
+                    m.innerText = "Decisión de rechazo registrada. Los suministros han sido revocados y expulsado de las instalaciones.";
+                    m.style.display = 'block';
+                }, 600);
+            }
+        }
+
+        function startGame() {
+            game.started = true;
+            document.getElementById('intro-screen').style.display = 'none';
+            document.getElementById('game-container').style.display = 'flex';
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            updateUI();
+        }
+
+        function dig() {
+            if(!game.started) return;
+            let p = game.power * game.mod;
+            game.depth += p;
+            if(Math.random() < (game.luck/100)) {
+                let f = Math.floor(Math.random() * p) + 1;
+                game.coins += f;
+                showPop(`+${f}🪙`);
+            }
+            updateUI();
+        }
+
+        document.getElementById('hole').addEventListener('click', dig);
+
+        function buy(t) {
+            if(game.coins >= game.costs[t]) {
+                game.coins -= game.costs[t];
+                if(t==='auto') game.auto++; else if(t==='luck') game.luck += 3; else game.power++;
+                game.costs[t] = Math.floor(game.costs[t] * 1.7);
+                // Sonido de compra leve
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.frequency.setValueAtTime(440, audioCtx.currentTime);
+                gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                osc.connect(gain); gain.connect(audioCtx.destination);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.1);
+                updateUI();
+            }
+        }
+
+        function payDebt() {
+            if(game.coins >= game.debt) {
+                game.coins -= game.debt;
+                game.debt = Math.floor(game.debt * 2.4);
+                game.timeLeft = 180;
+                playThud(); // USAR GOLPE PESADO AL PAGAR
+                updateUI();
+            }
+        }
+
+        setInterval(() => {
+            if(!game.started) return;
+            if(game.timeLeft > 0) {
+                game.timeLeft--;
+                if(game.timeLeft < 30) {
+                    document.body.classList.add('panic-mode');
+                    // Sonido latido/respiración sordo
+                    if(game.timeLeft % 2 === 0) {
+                        const osc = audioCtx.createOscillator();
+                        osc.frequency.setValueAtTime(60, audioCtx.currentTime);
+                        const g = audioCtx.createGain();
+                        g.gain.setValueAtTime(0.2, audioCtx.currentTime);
+                        g.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.5);
+                        osc.connect(g); g.connect(audioCtx.destination);
+                        osc.start(); osc.stop(audioCtx.currentTime + 0.5);
+                    }
+                } else document.body.classList.remove('panic-mode');
+            } else {
+                game.started = false;
+                document.getElementById('game-over').style.display='flex';
+                document.getElementById('over-reason').innerText = "La cuota no fue saldada y has sido expulsado de las instalaciones... tu familia no tendra un mañana.";
+            }
+
+            if(game.auto > 0) {
+                game.depth += game.auto;
+                if(Math.random() < 0.1) game.coins += 1;
+            }
+
+            if(game.timeLeft % 20 === 0 && Math.random() < 0.4 && !game.event) triggerEvent();
+            if(game.timeLeft % 8 === 0) document.getElementById('msg-console').innerText = "> " + consoleTexts[Math.floor(Math.random()*consoleTexts.length)];
+            
+            // Geiger aleatorio
+            if(Math.random() < 0.15) playGeiger();
+
+            updateUI();
+        }, 1000);
+
+        function triggerEvent() {
+            game.event = true;
+            const good = Math.random() > 0.5;
+            const ov = document.getElementById('event-overlay');
+            ov.style.opacity = "1";
+            if(good) {
+                ov.innerText = "VETA DE ORO: x3 EFICIENCIA";
+                ov.style.color = "var(--gold)";
+                game.mod = 3;
+            } else {
+                ov.innerText = "DERRUMBE: -50% VELOCIDAD";
+                ov.style.color = "var(--debt)";
+                game.mod = 0.5;
+            }
+            setTimeout(() => {
+                ov.style.opacity = "0"; game.event = false; game.mod = 1;
+            }, 6000);
+        }
+
+        function updateUI() {
+            document.getElementById('depth-display').innerText = Math.floor(game.depth) + "m";
+            document.getElementById('coins-display').innerText = game.coins;
+            document.getElementById('lvl-pwr').innerText = game.power;
+            document.getElementById('lvl-luck').innerText = game.luck + "%";
+            document.getElementById('lvl-auto').innerText = game.auto + " /s";
+            document.getElementById('debt-val-display').innerText = `CUOTA: ${game.debt} 🪙`;
+
+            let m = Math.floor(game.timeLeft/60), s = game.timeLeft%60;
+            document.getElementById('timer-display').innerText = `${m}:${s.toString().padStart(2,'0')}`;
+            document.getElementById('time-bar-fill').style.width = (game.timeLeft/180)*100 + "%";
+
+            // Actualización de botones y costos
+            const btns = [
+                {id: 'btn-power', key: 'power'},
+                {id: 'btn-luck', key: 'luck'},
+                {id: 'btn-auto', key: 'auto'}
+            ];
+
+            btns.forEach(b => {
+                const el = document.getElementById(b.id);
+                const cost = game.costs[b.key];
+                el.innerText = `COSTO: ${cost}`;
+                if(game.coins >= cost) {
+                    el.classList.add('active');
+                    el.disabled = false;
+                } else {
+                    el.classList.remove('active');
+                    el.disabled = true;
+                }
+            });
+            
+            const pBtn = document.getElementById('btn-pay-debt');
+            if(game.coins >= game.debt) pBtn.classList.add('active'); else pBtn.classList.remove('active');
+
+            let tidx = 0; if(game.power > 7) tidx = 1; if(game.power > 18) tidx = 2;
+            document.getElementById('tool-svg').innerHTML = tools[tidx];
+
+            let prog = (game.depth % 100);
+            document.getElementById('ring').style.background = `conic-gradient(var(--accent) ${prog}%, #151515 ${prog}%)`;
+        }
+
+        function showPop(txt) {
+            const e = document.createElement('div');
+            e.innerText = txt;
+            e.style.cssText = `position:absolute; left:50%; top:50%; color:var(--gold); font-weight:900; animation:fUp 0.8s forwards; pointer-events:none; z-index:100; font-size:1.5rem;`;
+            document.body.appendChild(e);
+            setTimeout(() => e.remove(), 800);
+        }
+    </script>
+</body>
+</html>
